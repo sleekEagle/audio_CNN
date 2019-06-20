@@ -25,7 +25,7 @@ from keras.layers.convolutional import Conv2D, MaxPooling2D, ZeroPadding2D
 from keras.layers.normalization import BatchNormalization
 from keras.regularizers import l2
 
-def alexnet_model(img_shape=(224, 224, 3), n_classes=10, l2_reg=0.,weights=None):
+def alexnet_model(img_shape=(224, 224, 1), n_classes=10, l2_reg=0.,weights=None):
 
 	# Initialize model
 	alexnet = Sequential()

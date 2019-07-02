@@ -7,15 +7,18 @@ Created on Tue Jun 18 15:27:04 2019
 """
 import numpy as np
 from common import get_ext_paths
-from create_spectrogram import plot_spectrogram
+import create_spectrogram
 from skimage.transform import resize
 import matplotlib.pyplot as plt
 import pandas as pd
 from random import shuffle
 import mini_xception
 import keras
+from keras.callbacks import ReduceLROnPlateau
 import importlib
 from random import randint
+import matplotlib.pyplot as plt
+
 
 
 
@@ -40,15 +43,11 @@ def get_spectrogram_windows(spectrogram,max_time):
             break
         spec = spectrogram[:,i:i+samples_per_window]
         spec = resize(spec,INPUT_SHAPE)
-        log_spec = log_spectrogram(spec,1e-10) 
+        log_spec = create_spectrogram.normalize_spectrogram(spec) 
         spec_list.append(log_spec)
     return spec_list
 
-def log_spectrogram(spectrogram,c):
-    return np.log(spectrogram+c)
 
-def normalize_spectrogram(spectrogram):
-    np.mean(spectrogram,axis=1)
       
 def get_spectrogram(max_freq,max_time,spectrogram):
     times = []
@@ -66,12 +65,7 @@ def get_spectrogram(max_freq,max_time,spectrogram):
     plot_spectrogram(np.array(frequencies),np.array(times),spectrogram)
     
 
-def plot_spectrogram_hist(spectrogram):   
-    spec = spectrogram.flatten()
-    spec = pd.Series(spec)
-    
-    spec.plot.hist(grid=True, bins=20, rwidth=0.9,color='#607c8e')
-    plt.grid(axis='y', alpha=0.75)
+
     
  
 def get_data_split(ratios = [0.6,0.8]):
@@ -144,10 +138,9 @@ def get_batch(data,labels,size,neutral_ratio):
     labels = np.repeat(onehot_class,size,axis=0)
     return data,labels
 
-#for bathc wise learning (with temporal pooling)
-d,l = get_batch(data,labels,100,0.6)
 
-    
+#train the CNN
+#data preparation    
 train,vali,test = get_data_split()
 train_data,train_labels = get_data(train)
 vali_data,vali_labels = get_data(vali)
@@ -156,18 +149,69 @@ test_data,test_labels = get_data(test)
 
 
 batch_size = 32
-epochs = 100
+epochs = 30
 importlib.reload(mini_xception)
 model = mini_xception.get_xception()
 
+#callback
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2,patience=5, min_lr=0.0001)
 
-reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2,patience=5, min_lr=0.00001)
+#train for different batch sizes
+history = []
+for bs in range(5,5,1):
+    print(bs)
+    model = mini_xception.get_xception()
+    res = model.fit(x = train_data,y=train_labels,batch_size=bs,epochs=epochs,validation_data=[vali_data,vali_labels],callbacks = [reduce_lr])
+    history.append([bs,res.history])
 
-model.fit(x = train_data,y=train_labels,batch_size=batch_size,epochs=epochs,validation_data=[vali_data,vali_labels])
+bs = []   
+train_acc = []
+val_acc = [] 
+for h in history:
+    bs.append(h[0])
+    train_acc.append(h[1]['acc'])
+    val_acc.append(h[1]['val_acc'])
 
+
+#plot results
+max_train_acc = np.max(np.array(train_acc),axis=1)
+max_val_acc = np.max(np.array(val_acc),axis=1)
+
+
+
+bs = [str(i) for i in bs]
+plt.figure(figsize=(10, 6))
+plt.bar(bs, max_train_acc)
+plt.xlabel("batch size")
+plt.ylabel("accuracy")
+plt.show()
+
+    
+plt.plot(val_acc[0])
+plt.plot(val_acc[1])
+plt.plot(val_acc[3])
+plt.plot(val_acc[4])
+plt.show()
+
+#train network for a single batch_size
+model = mini_xception.get_xception()
+res = model.fit(x = train_data,y=train_labels,batch_size=5,epochs=100,validation_data=[vali_data,vali_labels],callbacks = [reduce_lr])
+    
+    
 model.evaluate(x=test_data,y=test_labels)
 
+#plt.xticks(x_range,bs)
 
+
+#get a single spectrogram
+frequencies, times, spectrogram = create_spectrogram.get_spectrogram("/home/sleek_eagle/research/emotion_recognition/data/savee/AudioData/DC/a15.wav")
+spec_log = create_spectrogram.log_spectrogram(spectrogram,1e-10)
+spec_std = create_spectrogram.normalize_spectrogram(spectrogram)
+spec_minmax = create_spectrogram.minmax_spectrogram(spectrogram)
+
+create_spectrogram.plot_spectrogram(frequencies, times, spec_std)
+
+create_spectrogram.plot_spectrogram_hist(spec_minmax)
 
         
 
